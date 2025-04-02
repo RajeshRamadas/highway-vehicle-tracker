@@ -180,11 +180,11 @@ async def process_frame(frame_data, model_version, connection_id, confidence=0.2
                 if track_vehicles:
                     direction_line_y = vehicle_tracking['direction_line_y']
                     # Make line more visible - thicker and brighter blue
-                    cv2.line(img, (0, direction_line_y), (width, direction_line_y), (255, 0, 0), 5)
+                    cv2.line(img, (0, direction_line_y), (width, direction_line_y), (255, 0, 0), 2)
                     
                     # Add text to indicate line purpose - larger font
-                    cv2.putText(img, "COUNTING LINE", (width//4, direction_line_y - 15),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+                    #cv2.putText(img, "COUNTING LINE", (width//4, direction_line_y - 15),
+                    #          cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 1)
                 
                 # Process detections
                 for box in result.boxes:
@@ -196,9 +196,9 @@ async def process_frame(frame_data, model_version, connection_id, confidence=0.2
                     
                     # Draw rectangle and text
                     color = (0, 255, 0)  # Green for regular detections
-                    cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+                    cv2.rectangle(img, (x1, y1), (x2, y2), color, 1)
                     cv2.putText(img, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
                     detection_count += 1
                     
                     # Vehicle tracking logic
@@ -293,8 +293,8 @@ async def process_frame(frame_data, model_version, connection_id, confidence=0.2
                 }
             
             # Add processing info on the image
-            cv2.putText(img, f"Model: {model_version}", (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            #cv2.putText(img, f"Model: {model_version}", (10, 30),
+            #          cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             
             # Encode the processed image to base64
             _, buffer = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 80])
