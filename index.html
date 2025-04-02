@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YOLO Video Processing Test</title>
+    <title>Highway Vehicle Tracker</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -476,11 +476,15 @@
 .hidden {
     display: none;
 }
+h1 {
+text-align: center;
+text-transform: uppercase;
+}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>YOLO Video Processing Test</h1>
+        <h1>Highway Vehicle Tracker</h1>
         
         <div class="settings-panel">
             <h2>Settings</h2>
@@ -571,14 +575,7 @@
                 
                 <div class="settings-group">
                     <h3>Processing Options</h3>
-                    <div class="control-group">
-                        <input type="checkbox" id="showConfidence" checked>
-                        <label for="showConfidence">Show Confidence Scores</label>
-                    </div>
-                    <div class="control-group">
-                        <input type="checkbox" id="mirrorVideo" checked>
-                        <label for="mirrorVideo">Mirror Camera Input</label>
-                    </div>
+
                     <div class="control-group">
                         <label for="confidenceThreshold">Confidence Threshold:</label>
                         <div class="slider-with-value">
@@ -608,23 +605,8 @@
                 </div>
             </div>
         </div>
-        
-        <div class="controls">
-            <div class="control-group">
-                <button id="startBtn">Start</button>
-                <button id="stopBtn" disabled>Stop</button>
-                <div id="status" class="disconnected">Disconnected</div>
-                <div id="fps">0 FPS</div>
-            </div>
-            
-            <div class="control-group" id="videoControls">
-                <button id="playPauseBtn">Pause</button>
-                <input type="range" id="videoSeek" min="0" max="100" value="0">
-                <span id="videoTime">00:00 / 00:00</span>
-            </div>
-        </div>
-        
-        <div class="stats-display">
+
+         <div class="stats-display">
             <div class="stat-item">
                 <span class="stat-label">Model:</span>
                 <span class="stat-value" id="currentModel">-</span>
@@ -642,6 +624,35 @@
                 <span class="stat-value" id="detectionCount">-</span>
             </div>
         </div>
+
+        <div class="video-container">
+            <div class="video-box">
+                <h2>Input Video</h2>
+                <video id="localVideo" autoplay muted playsinline></video>
+                <canvas id="localCanvas" class="hidden"></canvas>
+            </div>
+
+            <div class="video-box">
+                <h2>Processed Output</h2>
+                <canvas id="processedCanvas"></canvas>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <button id="startBtn">Start</button>
+                <button id="stopBtn" disabled>Stop</button>
+                <div id="status" class="disconnected">Disconnected</div>
+                <div id="fps">0 FPS</div>
+            </div>
+            
+            <div class="control-group" id="videoControls">
+                <button id="playPauseBtn">Pause</button>
+                <input type="range" id="videoSeek" min="0" max="100" value="0">
+                <span id="videoTime">00:00 / 00:00</span>
+            </div>
+        </div>
+
         
 		
 		<div id="vehicleCountingStats" class="counting-stats-display hidden">
@@ -664,6 +675,7 @@
             </div>
         </div>
     </div>
+
     
     <div class="counting-table-container">
         <h4>Detailed Counts by Object Class</h4>
@@ -682,55 +694,10 @@
         </table>
     </div>
 </div>
-        <!-- Vehicle Counts Display -->
-        <div id="vehicleCountDisplay" class="vehicle-count-display hidden">
-            <h3>Vehicle Counts</h3>
-            <div class="count-summary">
-                <div class="stat-item">
-                    <span class="stat-label">Left → Right:</span>
-                    <span class="stat-value" id="leftToRightCount">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Right → Left:</span>
-                    <span class="stat-value" id="rightToLeftCount">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Total Vehicles:</span>
-                    <span class="stat-value" id="totalVehicles">0</span>
-                </div>
-            </div>
-            <div class="count-table-container">
-                <table class="count-table">
-                    <thead>
-                        <tr>
-                            <th>Label</th>
-                            <th>Left → Right</th>
-                            <th>Right → Left</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody id="countTableBody">
-                        <!-- Will be populated dynamically -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        <div class="video-container">
-            <div class="video-box">
-                <h2>Input Video</h2>
-                <video id="localVideo" autoplay muted playsinline></video>
-                <canvas id="localCanvas" class="hidden"></canvas>
-            </div>
-            
-            <div class="video-box">
-                <h2>Processed Output</h2>
-                <canvas id="processedCanvas"></canvas>
-            </div>
-        </div>
+
         
         <div>
-            <h2>Debug Log</h2>
+            <h2>Log</h2>
             <div id="log" class="log-container"></div>
         </div>
     </div>
@@ -807,11 +774,12 @@
             // Mirror video toggle
             const mirrorVideo = document.getElementById('mirrorVideo');
             const localVideo = document.getElementById('localVideo');
-            
+
+            mirrorVideo.checked = true;
             mirrorVideo.addEventListener('change', function() {
                 localVideo.style.transform = this.checked ? 'scaleX(-1)' : 'none';
             });
-            
+
             // Initialize model type
             window.modelType = 'standard';
         });
