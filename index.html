@@ -575,7 +575,10 @@ text-transform: uppercase;
                 
                 <div class="settings-group">
                     <h3>Processing Options</h3>
-
+                    <div class="control-group">
+                        <input type="checkbox" id="mirrorVideo" checked>
+                        <label for="mirrorVideo">Mirror Camera Input</label>
+                    </div>
                     <div class="control-group">
                         <label for="confidenceThreshold">Confidence Threshold:</label>
                         <div class="slider-with-value">
@@ -665,11 +668,11 @@ text-transform: uppercase;
             </div>
             <div class="counting-direction-totals">
                 <div class="counting-direction-item">
-                    <span class="counting-label">Left → Right:</span>
+                    <span class="counting-label">Toll Move In:</span>
                     <span class="counting-value" id="leftToRightTotal">0</span>
                 </div>
                 <div class="counting-direction-item">
-                    <span class="counting-label">Right → Left:</span>
+                    <span class="counting-label">Toll Move Out:</span>
                     <span class="counting-value" id="rightToLeftTotal">0</span>
                 </div>
             </div>
@@ -683,8 +686,8 @@ text-transform: uppercase;
             <thead>
                 <tr>
                     <th>Object Class</th>
-                    <th>Left → Right</th>
-                    <th>Right → Left</th>
+                    <th>Toll Move In</th>
+                    <th>Toll Move Out</th>
                     <th>Total</th>
                 </tr>
             </thead>
@@ -703,6 +706,7 @@ text-transform: uppercase;
     </div>
     
     <script>
+
         // Initialize UI interaction for sliders
         document.addEventListener('DOMContentLoaded', function() {
             // Tab switching
@@ -775,7 +779,6 @@ text-transform: uppercase;
             const mirrorVideo = document.getElementById('mirrorVideo');
             const localVideo = document.getElementById('localVideo');
 
-            mirrorVideo.checked = true;
             mirrorVideo.addEventListener('change', function() {
                 localVideo.style.transform = this.checked ? 'scaleX(-1)' : 'none';
             });
