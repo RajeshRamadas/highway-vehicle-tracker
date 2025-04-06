@@ -13,6 +13,9 @@ from concurrent.futures import ThreadPoolExecutor
 import uuid
 import shutil
 from collections import defaultdict
+import boto3
+from botocore.exceptions import ClientError
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,34 +28,53 @@ thread_pool = ThreadPoolExecutor(max_workers=2)
 CUSTOM_MODEL_DIR = "custom_models"
 os.makedirs(CUSTOM_MODEL_DIR, exist_ok=True)
 
+# Create models directory for downloaded models
+MODELS_DIR = "models"
+os.makedirs(MODELS_DIR, exist_ok=True)
+
 # YOLO model configurations - Updated with more YOLOv8 variants
 YOLO_VERSIONS = {
     'yolov8n': {
-        'path': 'yolov8n.pt',
+        'path': os.path.join(MODELS_DIR, 'yolov8n.pt'),
         'description': 'YOLOv8 Nano - Fast and lightweight',
         'type': 'detect'
     },
     'yolov8s': {
-        'path': 'yolov8s.pt',
+        'path': os.path.join(MODELS_DIR, 'yolov8s.pt'),
         'description': 'YOLOv8 Small - Good balance of speed and accuracy',
         'type': 'detect'
     },
     'yolov8m': {
-        'path': 'yolov8m.pt',
+        'path': os.path.join(MODELS_DIR, 'yolov8m.pt'),
         'description': 'YOLOv8 Medium - Higher accuracy, moderate speed',
         'type': 'detect'
     },
     'yolov8l': {
-        'path': 'yolov8l.pt',
+        'path': os.path.join(MODELS_DIR, 'yolov8l.pt'),
         'description': 'YOLOv8 Large - High accuracy, slower',
         'type': 'detect'
     },
     'yolov8x': {
-        'path': 'yolov8x.pt',
+        'path': os.path.join(MODELS_DIR, 'yolov8x.pt'),
         'description': 'YOLOv8 XLarge - Highest accuracy, slowest',
         'type': 'detect'
     }
 }
+
+# Configure S3 client
+def configure_s3_client():
+    # Load environment variables for S3 if not already loaded
+    if 'AWS_ACCESS_KEY_ID' not in os.environ:
+        load_dotenv()
+    
+    # Initialize S3 client
+    s3_client = boto3.client(
+        's3',
+        region_name=os.getenv('AWS_REGION'),
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+    )
+    return s3_client
 
 # Active websocket connections
 websockets = {}
@@ -319,6 +341,7 @@ async def process_frame(frame_data, model_version, connection_id, confidence=0.2
     except Exception as e:
         logger.error(f"Error processing frame: {str(e)}")
         return {'image': frame_data, 'error': str(e), 'detections': 0}
+
 # WebSocket handler
 async def websocket_handler(request):
     ws = web.WebSocketResponse()
@@ -472,6 +495,32 @@ async def websocket_handler(request):
     
     return ws
 
+# Set up template files
+def setup_templates():
+    """Create template files for S3 browser and model download pages"""
+    # Create templates directory if it doesn't exist
+    os.makedirs('templates', exist_ok=True)
+    
+    # Create s3_browser.html if it doesn't exist
+    if not os.path.exists('templates/s3_browser.html'):
+        try:
+            with open('s3_browser.html', 'r') as template:
+                with open('templates/s3_browser.html', 'w') as f:
+                    f.write(template.read())
+            logger.info("Created S3 browser template")
+        except FileNotFoundError:
+            logger.warning("s3_browser.html template not found, please create it manually")
+    """
+    # Create download_models.html if it doesn't exist
+    if not os.path.exists('templates/download_models.html'):
+        try:
+            with open('download_models.html', 'r') as template:
+                with open('templates/download_models.html', 'w') as f:
+                    f.write(template.read())
+            logger.info("Created model download template")
+        except FileNotFoundError:
+            logger.warning("download_models.html template not found, please create it manually")
+    """
 async def on_prepare(request, response):
     # CORS headers here if needed
     pass
@@ -590,6 +639,297 @@ async def upload_custom_model(request):
             'message': f'Server error: {str(e)}'
         }, status=500)
 
+# S3 Browser Functions
+async def s3_browser(request):
+    """Render the S3 browser page"""
+    return web.FileResponse('templates/s3_browser.html')
+
+async def list_s3_files(request):
+    """API endpoint to list files in the S3 bucket"""
+    try:
+        s3_client = configure_s3_client()
+        BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+        
+        prefix = request.query.get('prefix', '')
+        delimiter = '/'
+        
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=prefix,
+            Delimiter=delimiter
+        )
+        
+        # Process folders (common prefixes)
+        folders = []
+        if 'CommonPrefixes' in response:
+            for prefix_item in response['CommonPrefixes']:
+                prefix_path = prefix_item['Prefix']
+                # Extract just the folder name, not the full path
+                folder_name = prefix_path
+                if prefix:
+                    if prefix_path.startswith(prefix):
+                        folder_name = prefix_path[len(prefix):]
+                
+                # Remove trailing slash for display
+                if folder_name.endswith('/'):
+                    folder_name = folder_name[:-1]
+                
+                folders.append({
+                    'key': prefix_path,
+                    'name': folder_name,
+                    'is_folder': True,
+                    'size': 0,
+                    'last_modified': None
+                })
+        
+        # Process files
+        files = []
+        if 'Contents' in response:
+            for item in response['Contents']:
+                # Skip the current directory entry itself or folders
+                if item['Key'] == prefix or item['Key'].endswith('/'):
+                    continue
+                
+                # Extract just the file name, not the full path
+                file_name = item['Key']
+                if prefix:
+                    if file_name.startswith(prefix):
+                        file_name = file_name[len(prefix):]
+                
+                files.append({
+                    'key': item['Key'],
+                    'name': file_name,
+                    'is_folder': False,
+                    'size': item['Size'],
+                    'last_modified': item['LastModified'].isoformat()
+                })
+        
+        # Create breadcrumb data
+        breadcrumbs = []
+        if prefix:
+            # Add root
+            breadcrumbs.append({
+                'name': 'Root',
+                'path': '',
+                'is_root': True
+            })
+            
+            # Split the prefix by '/' to build breadcrumb trail
+            parts = prefix.split('/')
+            current_path = ''
+            
+            # Last item might be empty if prefix ends with '/'
+            if parts[-1] == '':
+                parts.pop()
+            
+            for i, part in enumerate(parts):
+                current_path += part + '/'
+                breadcrumbs.append({
+                    'name': part,
+                    'path': current_path,
+                    'is_root': False
+                })
+        else:
+            # Just the root breadcrumb
+            breadcrumbs.append({
+                'name': 'Root',
+                'path': '',
+                'is_root': True
+            })
+        
+        return web.json_response({
+            'files': files,
+            'folders': folders,
+            'breadcrumbs': breadcrumbs,
+            'current_prefix': prefix
+        })
+        
+    except ClientError as e:
+        logger.error(f"Error listing S3 files: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    except Exception as e:
+        logger.error(f"Unexpected error listing S3 files: {e}")
+        return web.json_response({'error': 'An unexpected error occurred'}, status=500)
+
+async def download_s3_file(request):
+    """Generate a presigned URL for file download"""
+    try:
+        s3_client = configure_s3_client()
+        BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+        
+        file_key = request.query.get('key')
+        if not file_key:
+            return web.json_response({'error': 'File key is required'}, status=400)
+            
+        # Generate a presigned URL for direct download
+        presigned_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': BUCKET_NAME,
+                'Key': file_key
+            },
+            ExpiresIn=900  # 15 minutes
+        )
+        
+        return web.json_response({'download_url': presigned_url})
+        
+    except ClientError as e:
+        logger.error(f"Error generating download URL: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    except Exception as e:
+        logger.error(f"Unexpected error generating download URL: {e}")
+        return web.json_response({'error': 'An unexpected error occurred'}, status=500)
+
+
+async def download_model_page(request):
+    """Render the model download page"""
+    return web.FileResponse('templates/download_models.html')
+
+async def list_yolo_models(request):
+    """API endpoint to list available YOLO models for download"""
+    try:
+        # List of available YOLO models for download
+        models = [
+            {
+                'id': 'yolov8n',
+                'name': 'YOLOv8 Nano',
+                'description': 'Fast and lightweight model for real-time detection',
+                'size': '6.3 MB',
+                'download_url': '/api/download-model?model=yolov8n.pt'
+            },
+            {
+                'id': 'yolov8s',
+                'name': 'YOLOv8 Small',
+                'description': 'Good balance between speed and accuracy',
+                'size': '21.5 MB',
+                'download_url': '/api/download-model?model=yolov8s.pt'
+            },
+            {
+                'id': 'yolov8m',
+                'name': 'YOLOv8 Medium',
+                'description': 'Higher accuracy, moderate speed',
+                'size': '52.0 MB',
+                'download_url': '/api/download-model?model=yolov8m.pt'
+            },
+            {
+                'id': 'yolov8l',
+                'name': 'YOLOv8 Large',
+                'description': 'High accuracy, slower speed',
+                'size': '86.5 MB',
+                'download_url': '/api/download-model?model=yolov8l.pt'
+            },
+            {
+                'id': 'yolov8x',
+                'name': 'YOLOv8 XLarge',
+                'description': 'Highest accuracy, slowest speed',
+                'size': '130.5 MB',
+                'download_url': '/api/download-model?model=yolov8x.pt'
+            }
+        ]
+        
+        return web.json_response(models)
+    except Exception as e:
+        logger.error(f"Error listing YOLO models: {e}")
+        return web.json_response({'error': 'An unexpected error occurred'}, status=500)
+
+async def download_model(request):
+    """API endpoint to download a specific YOLO model"""
+    try:
+        s3_client = configure_s3_client()
+        BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+        
+        model_name = request.query.get('model')
+        if not model_name:
+            return web.json_response({'error': 'Model name is required'}, status=400)
+        
+        # First check if model exists locally
+        model_id = model_name.split('.')[0]  # Remove extension
+        
+        local_path = None
+        # Check in YOLO_VERSIONS for standard models
+        if model_id in YOLO_VERSIONS:
+            local_path = YOLO_VERSIONS[model_id]['path']
+        # Check custom models directory
+        elif model_id.startswith('custom_'):
+            local_path = os.path.join(CUSTOM_MODEL_DIR, model_name)
+        
+        # If model exists locally, serve it directly
+        if local_path and os.path.exists(local_path):
+            logger.info(f"Serving local model: {local_path}")
+            return web.FileResponse(
+                path=local_path,
+                headers={'Content-Disposition': f'attachment; filename="{model_name}"'}
+            )
+        
+        # If not found locally, try S3
+        try:
+            logger.info(f"Checking S3 for model: {model_name}")
+            # Generate a presigned URL for the model in S3
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': BUCKET_NAME,
+                    'Key': f'models/{model_name}'
+                },
+                ExpiresIn=900  # 15 minutes
+            )
+            logger.info(f"Model found in S3, returning presigned URL")
+            return web.json_response({'download_url': presigned_url})
+        except ClientError as e:
+            logger.warning(f"Model not found in S3: {e}")
+            
+            # If not in S3, download from Ultralytics and serve
+            # Only for standard YOLOv8 models
+            if model_id in ['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x']:
+                try:
+                    # Create models directory if it doesn't exist
+                    os.makedirs(MODELS_DIR, exist_ok=True)
+                    target_path = os.path.join(MODELS_DIR, model_name)
+                    
+                    # Check if we already downloaded it
+                    if not os.path.exists(target_path):
+                        logger.info(f"Downloading model from Ultralytics: {model_name}")
+                        
+                        # Download model using aiohttp
+                        ultraytics_url = f"https://github.com/ultralytics/assets/releases/download/v0.0.0/{model_name}"
+                        
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(ultraytics_url) as response:
+                                if response.status != 200:
+                                    raise Exception(f"Failed to download model: HTTP {response.status}")
+                                
+                                # Save model to file
+                                with open(target_path, 'wb') as f:
+                                    f.write(await response.read())
+                        
+                        logger.info(f"Model downloaded and saved to {target_path}")
+                    else:
+                        logger.info(f"Using previously downloaded model: {target_path}")
+                    
+                    # Serve the downloaded file
+                    return web.FileResponse(
+                        path=target_path,
+                        headers={'Content-Disposition': f'attachment; filename="{model_name}"'}
+                    )
+                
+                except Exception as e:
+                    logger.error(f"Error downloading model from Ultralytics: {e}")
+                    # Fall back to redirect to Ultralytics
+                    return web.json_response({
+                        'error': 'Could not download model',
+                        'fallback_url': f'https://github.com/ultralytics/assets/releases/download/v0.0.0/{model_name}'
+                    }, status=404)
+            else:
+                # For custom models that are not found
+                return web.json_response({
+                    'error': 'Model not found',
+                    'message': f'The model {model_name} was not found in local storage or S3'
+                }, status=404)
+                
+    except Exception as e:
+        logger.error(f"Error downloading YOLO model: {e}")
+        return web.json_response({'error': 'An unexpected error occurred'}, status=500)
+
 # Main application setup
 app = web.Application(
     client_max_size=1024*1024*1000,  # Set max size to 1000 MB (adjust as needed)
@@ -601,6 +941,22 @@ app.router.add_get('/models', get_models)
 app.router.add_get('/test_models', test_models)
 app.router.add_post('/upload_model', upload_custom_model)
 app.router.add_static('/static/', path='static')
+
+# Add S3 and model download routes
+def add_s3_routes():
+    """Add S3 browser and model download routes to the app"""
+    # Check and create template files
+    setup_templates()
+    
+    # Add routes
+    app.router.add_get('/s3-browser', s3_browser)
+    app.router.add_get('/api/s3/files', list_s3_files)
+    app.router.add_get('/api/s3/download', download_s3_file)
+    app.router.add_get('/download-model', download_model_page)
+    app.router.add_get('/api/yolo-models', list_yolo_models)
+    #app.router.add_get('/api/download-model', download_model)
+    
+    logger.info("S3 browser and model download routes added")
 
 # Check if models exist
 def check_models():
@@ -616,4 +972,5 @@ def check_models():
 if __name__ == '__main__':
     logger.info("Starting server and checking models...")
     check_models()
+    add_s3_routes()
     web.run_app(app, host='0.0.0.0', port=8081)
