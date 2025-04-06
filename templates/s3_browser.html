@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 File Browser - Highway Vehicle Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 2px solid #2196F3;
+        }
+        header h1 {
+            margin: 0;
+            color: #333;
+        }
+        .back-link {
+            text-decoration: none;
+            color: #2196F3;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .breadcrumb {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 12px 15px;
+            background-color: #E3F2FD;
+            border-radius: 6px;
+            align-items: center;
+        }
+        .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            color: #1976D2;
+            font-weight: 500;
+        }
+        .breadcrumb-item:hover {
+            text-decoration: underline;
+        }
+        .breadcrumb-separator {
+            color: #90CAF9;
+            margin: 0 5px;
+        }
+        .file-browser {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .file-browser-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background-color: #2196F3;
+            color: white;
+            font-weight: bold;
+        }
+        .file-browser-header-item {
+            padding: 8px;
+        }
+        .name-column {
+            flex: 3;
+        }
+        .size-column, .date-column {
+            flex: 1;
+            text-align: center;
+        }
+        .action-column {
+            flex: 0.7;
+            text-align: center;
+        }
+        .file-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .file-item:hover {
+            background-color: #f5f5f5;
+        }
+        .file-item-name {
+            flex: 3;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+        .file-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .folder-icon {
+            color: #FFC107;
+        }
+        .file-icon-image {
+            color: #4CAF50;
+        }
+        .file-size, .file-date {
+            flex: 1;
+            text-align: center;
+            color: #666;
+        }
+        .file-action {
+            flex: 0.7;
+            text-align: center;
+        }
+        .download-button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .download-button:hover {
+            background-color: #1976D2;
+        }
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 50px 0;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(33, 150, 243, 0.2);
+            border-radius: 50%;
+            border-top-color: #2196F3;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .error-message {
+            padding: 20px;
+            background-color: #FFEBEE;
+            color: #C62828;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .empty-folder {
+            padding: 30px;
+            text-align: center;
+            color: #757575;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>S3 File Browser</h1>
+            <a href="/" class="back-link">← Back to Vehicle Tracker</a>
+        </header>
+        
+        <nav aria-label="breadcrumb">
+            <div class="breadcrumb" id="breadcrumb-container">
+                <div class="breadcrumb-item" data-prefix="">Root</div>
+            </div>
+        </nav>
+        
+        <div class="file-browser">
+            <div class="file-browser-header">
+                <div class="file-browser-header-item name-column">Name</div>
+                <div class="file-browser-header-item size-column">Size</div>
+                <div class="file-browser-header-item date-column">Last Modified</div>
+                <div class="file-browser-header-item action-column">Action</div>
+            </div>
+            
+            <div class="file-list" id="file-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>Loading files...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial file listing
+            listFiles('');
+            
+            // Handle breadcrumb clicks
+            document.getElementById('breadcrumb-container').addEventListener('click', function(e) {
+                const breadcrumbItem = e.target.closest('.breadcrumb-item');
+                if (breadcrumbItem) {
+                    const prefix = breadcrumbItem.getAttribute('data-prefix');
+                    listFiles(prefix);
+                }
+            });
+        });
+        
+        // Function to list files from a specific prefix
+        async function listFiles(prefix) {
+            try {
+                // Show loading state
+                document.getElementById('file-list').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>Loading files...</div>
+                </div>`;
+                
+                // Fetch files from server
+                const response = await fetch(`/api/s3/files?prefix=${encodeURIComponent(prefix)}`);
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update breadcrumbs
+                updateBreadcrumbs(data.breadcrumbs);
+                
+                // Combine folders and files
+                const items = [...data.folders, ...data.files];
+                
+                // Show content
+                displayFileList(items, prefix);
+            } catch (error) {
+                console.error('Error fetching files:', error);
+                document.getElementById('file-list').innerHTML = `
+                <div class="error-message">
+                    <strong>Error loading files:</strong> ${error.message}
+                    <p>Please try again later or contact the administrator.</p>
+                </div>`;
+            }
+        }
+        
+        // Function to update breadcrumbs
+        function updateBreadcrumbs(breadcrumbs) {
+            const container = document.getElementById('breadcrumb-container');
+            container.innerHTML = '';
+            
+            breadcrumbs.forEach((item, index) => {
+                // Create breadcrumb item
+                const element = document.createElement('div');
+                element.className = 'breadcrumb-item';
+                element.setAttribute('data-prefix', item.path);
+                element.textContent = item.name;
+                container.appendChild(element);
+                
+                // Add separator if not last item
+                if (index < breadcrumbs.length - 1) {
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '/';
+                    container.appendChild(separator);
+                }
+            });
+        }
+        
+        // Function to display the file list
+        function displayFileList(items, currentPrefix) {
+            const fileList = document.getElementById('file-list');
+            
+            if (items.length === 0) {
+                fileList.innerHTML = `
+                <div class="empty-folder">
+                    <p>This folder is empty</p>
+                </div>`;
+                return;
+            }
+            
+            // Sort items: folders first, then files alphabetically
+            items.sort((a, b) => {
+                if (a.is_folder && !b.is_folder) return -1;
+                if (!a.is_folder && b.is_folder) return 1;
+                return a.name.localeCompare(b.name);
+            });
+            
+            // Generate HTML for items
+            const html = items.map(item => {
+                // Format file size
+                const formattedSize = item.is_folder ? '-' : formatFileSize(item.size);
+                
+                // Format date
+                const formattedDate = item.is_folder || !item.last_modified ? '-' : formatDate(item.last_modified);
+                
+                return `
+                <div class="file-item">
+                    <div class="file-item-name" ${item.is_folder ? `onclick="listFiles('${item.key}')"` : ''}>
+                        <div class="file-icon ${item.is_folder ? 'folder-icon' : ''}">
+                            ${item.is_folder ? '📁' : '📄'}
+                        </div>
+                        <span>${item.name}</span>
+                    </div>
+                    <div class="file-size">${formattedSize}</div>
+                    <div class="file-date">${formattedDate}</div>
+                    <div class="file-action">
+                        ${!item.is_folder ? 
+                            `<button class="download-button" onclick="downloadFile('${item.key}', '${item.name}')">
+                                Download
+                            </button>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+            
+            fileList.innerHTML = html;
+        }
+        
+        // Function to download a file
+        async function downloadFile(key, fileName) {
+            try {
+                const response = await fetch(`/api/s3/download?key=${encodeURIComponent(key)}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to generate download URL: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Create a temporary anchor and trigger download
+                const a = document.createElement('a');
+                a.href = data.download_url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Error downloading file:', error);
+                alert(`Error downloading file: ${error.message}`);
+            }
+        }
+        
+        // Function to format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Function to format date
+        function formatDate(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+    </script>
+</body>
+</html>

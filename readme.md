@@ -1,151 +1,177 @@
 # Highway Vehicle Tracker
 
-## Overview
+A web-based application for detecting and tracking vehicles using YOLOv8 object detection models. This application combines real-time object detection with advanced vehicle tracking capabilities, S3 file browsing, and model management functionality.
 
-Highway Vehicle Tracker is an advanced real-time object detection and vehicle tracking application using YOLOv8 (You Only Look Once) neural network models. The application provides a comprehensive web interface for processing video streams from highways, with support for multiple YOLO model variants and custom model uploads.
+## Features
 
-## Key Features
+- **Real-time Object Detection**: Process video from a webcam or file using YOLOv8 models
+- **Vehicle Tracking**: Count vehicles crossing a customizable line with directional tracking
+- **Multiple YOLOv8 Models**: Support for nano, small, medium, large, and extra-large models
+- **S3 File Browser**: Browse and download files from your AWS S3
+- **Model Management**: Download and manage YOLOv8 models
+- **Custom Model Support**: Upload and use your own custom YOLO models
+- **Performance Controls**: Adjust quality, resolution, and frame rate for optimal performance
+- **Statistics Display**: View detection counts, processing times, and vehicle statistics
 
-### Vehicle Detection and Tracking
-- Real-time vehicle detection using YOLOv8 models
-- Multiple pre-trained model variants:
-  - YOLOv8 Nano (fastest)
-  - YOLOv8 Small
-  - YOLOv8 Medium
-  - YOLOv8 Large
-  - YOLOv8 XLarge (most accurate)
+## Screenshots
 
-### Intelligent Tracking Capabilities
-- Directional vehicle counting
-- Detailed statistics by vehicle type
-- Customizable tracking line position
-- Support for tracking multiple vehicle classes
-  - Cars
-  - Trucks
-  - Buses
-  - Motorcycles
-  - Other transportation vehicles
+![Vehicle Tracker Main Screen](screenshots/main_screen.png)
+![Model Download Page](screenshots/model_download.png)
+![S3 Browser](screenshots/s3_browser.png)
 
-### Flexible Input Sources
-- Camera input
-- Highway video file input
-- Adjustable resolution and frame rate
+## Requirements
 
-### Performance Controls
-- Confidence threshold adjustment
-- Frame quality control
-- Target frame rate selection
-
-### Custom Model Support
-- Upload and use custom PyTorch (.pt) models
-- Seamless integration with standard YOLO models
-
-## Potential Use Cases
-
-- Traffic flow analysis
-- Highway infrastructure planning
-- Vehicle counting and classification
-- Transportation research
-- Smart city monitoring
-
-## Prerequisites
-
-- Python 3.8+
-- PyTorch
-- Ultralytics YOLO
-- aiohttp
-- OpenCV
-- NumPy
+- Python 3.8+ 
+- PyTorch 2.0+
+- OpenCV 4.5+
+- Ultralytics YOLOv8
+- AWS account with S3 bucket (for S3 functionality)
 
 ## Installation
 
 1. Clone the repository:
-   ```bash
+   ```
    git clone https://github.com/yourusername/highway-vehicle-tracker.git
    cd highway-vehicle-tracker
    ```
 
 2. Create a virtual environment:
-   ```bash
+   ```
    python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. Install dependencies:
-   ```bash
+   ```
    pip install -r requirements.txt
    ```
 
-4. Install Ultralytics YOLO models:
-   ```bash
-   pip install -U ultralytics
+4. Configure AWS credentials:
+   Create a `.env` file in the project root with your AWS credentials:
+   ```
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=your_access_key
+   AWS_SECRET_ACCESS_KEY=your_secret_key
+   S3_BUCKET_NAME=your_bucket_name
    ```
 
-## Running the Application
+## Usage
 
-```bash
-python server.py
+1. Start the server:
+   ```
+   python server.py
+   ```
+
+2. Open your browser and navigate to:
+   ```
+   http://localhost:8081/
+   ```
+
+3. To use the application:
+   - Select a video file or use your webcam
+   - Choose a YOLO model for detection
+   - Adjust performance settings as needed
+   - Click "Start" to begin detection and tracking
+   - Enable vehicle counting to track objects crossing a line
+
+4. To download models:
+   - Navigate to "Download Models" page
+   - Click the download button for the desired model
+   - Models will be stored locally for future use
+
+5. To browse S3 files:
+   - Navigate to "S3 Browser" page
+   - Browse through folders and files in your S3 bucket
+   - Download files as needed
+
+## Project Structure
+
+```
+/highway-vehicle-tracker/
+│
+├── server.py               # Main server application
+├── index.html              # Main web interface
+├── .env                    # AWS configuration (create this)
+│
+├── models/                 # Downloaded YOLO models
+│   ├── yolov8n.pt          # Nano model
+│   ├── yolov8s.pt          # Small model
+│   └── ...
+│
+├── custom_models/          # User-uploaded custom models
+│
+├── templates/              # HTML templates
+│   ├── s3_browser.html     # S3 file browser interface
+│   └── download_models.html # Model download interface
+│
+└── static/                 # Static assets
+    └── client.js           # Client-side JavaScript
 ```
 
-The application will start and be accessible at `http://localhost:8081`
+## API Endpoints
 
-## Usage Guide
+- `/ws` - WebSocket for real-time processing
+- `/models` - Get available YOLO models
+- `/test_models` - Test YOLO models
+- `/upload_model` - Upload custom models
+- `/s3-browser` - S3 file browser page
+- `/api/s3/files` - List files in S3 bucket
+- `/api/s3/download` - Generate presigned URL for S3 file download
+- `/download-model` - Model download page
+- `/api/yolo-models` - List available YOLO models for download
+- `/api/download-model` - Download a specific YOLO model
 
-### Connecting a Video Source
-1. Choose between camera or highway video file input
-2. Select a YOLO model (standard or custom)
-3. Configure tracking and performance settings
-4. Click "Start" to begin processing
+## Performance Optimization
 
-### Vehicle Tracking
-- Enable vehicle tracking checkbox
-- Adjust the counting line position
-- View real-time counts by vehicle type and direction
+For optimal performance:
 
-### Performance Tuning
-- Adjust confidence threshold
-- Modify frame quality
-- Select target frame rate
-- Choose resolution
+1. **Model Selection**:
+   - Smaller models (nano, small) work best for real-time processing
+   - Larger models provide higher accuracy but require more powerful hardware
 
-## Custom Model Upload
+2. **Resolution and Quality**:
+   - Lower resolution and quality settings improve processing speed
+   - On less powerful hardware, use "Low" resolution setting
 
-1. Prepare a PyTorch (.pt) object detection model
-2. Go to the "Custom Model" tab
-3. Upload the model file
-4. Optionally provide a custom name
-5. Use the uploaded model for processing
+3. **Frame Rate**:
+   - Adjust the target frame rate based on your hardware capabilities
+   - 5-10 FPS is typically sufficient for vehicle tracking
 
-## Technical Details
+## Customization
 
-- WebSocket-based real-time communication
-- Asynchronous frame processing
-- GPU acceleration support
-- Flexible model loading
+### Custom YOLO Models
 
-## Security and Performance Notes
+You can upload your own YOLOv8-compatible models:
 
-- Supports CUDA for GPU acceleration
-- Handles various model sizes efficiently
-- Configurable processing parameters
+1. Navigate to the "Custom Model" tab in the model selector
+2. Choose a .pt file containing your custom model
+3. Click "Upload & Use Model"
+
+### Vehicle Tracking Settings
+
+Adjust vehicle tracking:
+
+1. Enable "Vehicle Counting" in the settings
+2. Use the slider to position the counting line
+3. Reset counts as needed using the "Reset Counts" button
 
 ## Troubleshooting
 
-- Ensure all dependencies are installed
-- Check console logs for detailed error messages
-- Verify camera/video file permissions
-- Confirm model file compatibility
-
-## Contributing
-
-Contributions are welcome! Please submit pull requests or open issues on the GitHub repository.
+- **Model Loading Errors**: Ensure model files are in the correct format and location
+- **WebSocket Connection Issues**: Check for firewall blocking WebSocket connections
+- **AWS Credential Errors**: Verify your AWS credentials in the .env file
+- **Slow Performance**: Try a smaller model or reduce resolution/quality settings
+- **CUDA Errors**: Check CUDA installation if using GPU acceleration
 
 ## License
 
-MIT License - See LICENSE file for details
+[MIT License](LICENSE)
 
 ## Acknowledgments
 
-- Ultralytics for YOLO implementation
-- OpenCV for image processing
-- PyTorch for deep learning framework
+- YOLOv8 by [Ultralytics](https://github.com/ultralytics/ultralytics)
+- Frontend based on modern web technologies
+
+## Contact
+
+For questions and support, please [open an issue](https://github.com/yourusername/highway-vehicle-tracker/issues) on GitHub.
