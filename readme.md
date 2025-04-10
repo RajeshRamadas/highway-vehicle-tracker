@@ -31,7 +31,7 @@ A web-based application for detecting and tracking vehicles using YOLOv8 object 
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/highway-vehicle-tracker.git
+   git clone https://github.com/RajeshRamadas/highway-vehicle-tracker.git
    cd highway-vehicle-tracker
    ```
 
@@ -174,4 +174,4 @@ Adjust vehicle tracking:
 
 ## Contact
 
-For questions and support, please [open an issue](https://github.com/yourusername/highway-vehicle-tracker/issues) on GitHub.
+For questions and support, please [open an issue](https://github.com/RajeshRamadas/highway-vehicle-tracker/issues) on GitHub.
